@@ -5,34 +5,41 @@ require('dotenv').config();
 // Validate required environment variables
 if (!process.env.MAIL_USER || !process.env.MAIL_PASS) {
     console.error('❌ ERROR: MAIL_USER and MAIL_PASS must be set in environment variables');
+    console.error('   Current MAIL_USER:', process.env.MAIL_USER ? 'SET' : 'NOT SET');
+    console.error('   Current MAIL_PASS:', process.env.MAIL_PASS ? `SET (${process.env.MAIL_PASS.length} chars)` : 'NOT SET');
 }
 
-// Production-ready transporter configuration for Gmail on hosting platforms like Render
-const transporter = nodemailer.createTransport({
+// Try port 587 with STARTTLS first (better for local development and some networks)
+const transporterConfig = {
     host: 'smtp.gmail.com',
-    port: 465, // Use 465 for SSL/TLS (more reliable on production hosts)
-    secure: true, // true for port 465
+    port: 587, // Changed to 587 with STARTTLS (often more compatible)
+    secure: false, // false for port 587, STARTTLS used instead
     auth: {
-        user: process.env.MAIL_USER,
-        pass: process.env.MAIL_PASS, // Gmail App Password (16 chars, no spaces)
+        user: process.env.MAIL_USER?.trim(), // Trim any whitespace
+        pass: process.env.MAIL_PASS?.trim(), // Trim any whitespace
     },
-    // Connection pool settings for production
-    pool: true,
-    maxConnections: 5,
-    maxMessages: 100,
-    // Timeout settings - critical for preventing connection hangs
-    connectionTimeout: 60000, // 60 seconds to establish connection
-    greetingTimeout: 30000,   // 30 seconds for server greeting
-    socketTimeout: 60000,     // 60 seconds of inactivity
-    // TLS configuration for compatibility with hosting providers
+    // Timeout settings - reduced for faster failure detection
+    connectionTimeout: 30000, // 30 seconds
+    greetingTimeout: 20000,   // 20 seconds
+    socketTimeout: 30000,     // 30 seconds
+    // TLS configuration
     tls: {
-        rejectUnauthorized: true,
-        minVersion: 'TLSv1.2',
-        ciphers: 'HIGH:MEDIUM:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!SRP:!CAMELLIA'
+        rejectUnauthorized: false, // Less strict for compatibility
+        minVersion: 'TLSv1.2'
     },
-    logger: false, // Set to true for debugging
-    debug: false,  // Set to true for verbose SMTP logs
+    logger: true, // Enabled for debugging
+    debug: true,  // Enabled for verbose logs
+};
+
+console.log('📧 Initializing SMTP with config:', {
+    host: transporterConfig.host,
+    port: transporterConfig.port,
+    secure: transporterConfig.secure,
+    user: transporterConfig.auth.user,
+    passLength: transporterConfig.auth.pass?.length
 });
+
+const transporter = nodemailer.createTransport(transporterConfig);
 
 // Verify SMTP connection on startup (non-blocking)
 transporter.verify(function(error, success) {
