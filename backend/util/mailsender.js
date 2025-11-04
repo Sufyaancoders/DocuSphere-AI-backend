@@ -9,43 +9,44 @@ if (!process.env.MAIL_USER || !process.env.MAIL_PASS) {
     console.error('   Current MAIL_PASS:', process.env.MAIL_PASS ? `SET (${process.env.MAIL_PASS.length} chars)` : 'NOT SET');
 }
 
-// Detect environment: Render blocks port 587, so use 465 for production
-const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
-const smtpPort = isProduction ? 465 : 587;
-const isSecure = isProduction ? true : false;
+// Force port 465 (SSL) for better reliability on all environments
+// Many ISPs and firewalls block port 587
+const smtpPort = 465;
+const isSecure = true;
 
 const transporterConfig = {
     host: 'smtp.gmail.com',
     port: smtpPort,
-    secure: isSecure, // true for 465 (SSL), false for 587 (STARTTLS)
+    secure: isSecure, // true for 465 (SSL)
     auth: {
         user: process.env.MAIL_USER?.trim(), // Trim any whitespace
         pass: process.env.MAIL_PASS?.trim(), // Trim any whitespace
     },
-    // Connection pool for production
-    pool: isProduction,
-    maxConnections: isProduction ? 5 : 1,
-    // Timeout settings
-    connectionTimeout: 60000, // 60 seconds
-    greetingTimeout: 30000,   // 30 seconds
-    socketTimeout: 60000,     // 60 seconds
-    // TLS configuration
+    // Disable connection pool to avoid connection issues
+    pool: false,
+    // Increased timeout settings for slow connections
+    connectionTimeout: 120000, // 120 seconds (2 minutes)
+    greetingTimeout: 60000,    // 60 seconds
+    socketTimeout: 120000,     // 120 seconds
+    // TLS configuration - Relaxed for Windows compatibility
     tls: {
-        rejectUnauthorized: !isProduction, // Less strict in production for Render compatibility
-        minVersion: 'TLSv1.2',
-        ciphers: 'HIGH:MEDIUM:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK'
+        rejectUnauthorized: false, // Allow self-signed certificates
+        minVersion: 'TLSv1.2'
     },
+    // DNS options for better resolution on Windows
+    dnsTimeout: 30000, // 30 seconds for DNS lookup
     logger: true, // Keep enabled for debugging
-    debug: false,  // Disable verbose logs in production
+    debug: true,  // Enable verbose logs for debugging
 };
 
 console.log('📧 Initializing SMTP with config:', {
-    environment: isProduction ? 'PRODUCTION' : 'DEVELOPMENT',
+    environment: process.env.NODE_ENV || 'DEVELOPMENT',
     host: transporterConfig.host,
     port: transporterConfig.port,
     secure: transporterConfig.secure,
     user: transporterConfig.auth.user,
-    passLength: transporterConfig.auth.pass?.length
+    passLength: transporterConfig.auth.pass?.length,
+    poolEnabled: transporterConfig.pool
 });
 
 const transporter = nodemailer.createTransport(transporterConfig);
