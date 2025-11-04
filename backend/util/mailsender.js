@@ -3,16 +3,39 @@ const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 // Create a single reusable transporter
+// const transporter = nodemailer.createTransport({
+//     host: 'smtp.gmail.com',
+//     port: 465, 
+//     secure: true,
+//     auth: {
+//         user: process.env.MAIL_USER,
+//         pass: process.env.MAIL_PASS,
+//     },
+// });
+// Create a single reusable transporter with better Render compatibility
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465, 
-    secure: true,
+    service: 'gmail',
     auth: {
         user: process.env.MAIL_USER,
         pass: process.env.MAIL_PASS,
     },
+    pool: true,
+    maxConnections: 1,
+    tls: {
+        rejectUnauthorized: false
+    },
+    debug: true, // Enable debug logging
+    logger: true // Log information
 });
 
+// Add connection verification
+transporter.verify(function(error, success) {
+    if (error) {
+        console.log('SMTP connection error:', error);
+    } else {
+        console.log('SMTP server is ready to send emails');
+    }
+});
 // Track recent emails using a more specific key to prevent template confusion
 const recentEmails = new Map();
 
