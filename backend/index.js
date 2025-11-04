@@ -10,13 +10,24 @@ mongoose.connectDB();
 
 const app = express();
 
+// app.use(cors({
+//   origin:  [
+//     'http://localhost:5173',
+//     'https://your-frontend-domain.vercel.app', // Add your Vercel domain
+//     'https://your-custom-domain.com' // Add any custom domains
+//   ], // adjust to your frontend URL/port
+//   credentials: true
+// }));
 app.use(cors({
-  origin:  [
+  origin: [
+    'http://localhost:3000',
     'http://localhost:5173',
-    'https://your-frontend-domain.vercel.app', // Add your Vercel domain
-    'https://your-custom-domain.com' // Add any custom domains
-  ], // adjust to your frontend URL/port
-  credentials: true
+    'http://localhost:5174',
+    'https://your-vercel-domain.vercel.app', // Add your production domain
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.use(cookieParser());
 app.use(express.json());
