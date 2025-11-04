@@ -2,102 +2,130 @@
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-// Create a single reusable transporter
-// const transporter = nodemailer.createTransport({
-//     host: 'smtp.gmail.com',
-//     port: 465, 
-//     secure: true,
-//     auth: {
-//         user: process.env.MAIL_USER,
-//         pass: process.env.MAIL_PASS,
-//     },
-// });
-// Create a single reusable transporter with better Render compatibility
+// Validate required environment variables
+if (!process.env.MAIL_USER || !process.env.MAIL_PASS) {
+    console.error('❌ ERROR: MAIL_USER and MAIL_PASS must be set in environment variables');
+}
+
+// Production-ready transporter configuration for Gmail on hosting platforms like Render
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465, // Use 465 for SSL/TLS (more reliable on production hosts)
+    secure: true, // true for port 465
     auth: {
         user: process.env.MAIL_USER,
-        pass: process.env.MAIL_PASS,
+        pass: process.env.MAIL_PASS, // Gmail App Password (16 chars, no spaces)
     },
+    // Connection pool settings for production
     pool: true,
-    maxConnections: 1,
+    maxConnections: 5,
+    maxMessages: 100,
+    // Timeout settings - critical for preventing connection hangs
+    connectionTimeout: 60000, // 60 seconds to establish connection
+    greetingTimeout: 30000,   // 30 seconds for server greeting
+    socketTimeout: 60000,     // 60 seconds of inactivity
+    // TLS configuration for compatibility with hosting providers
     tls: {
-        rejectUnauthorized: false
+        rejectUnauthorized: true,
+        minVersion: 'TLSv1.2',
+        ciphers: 'HIGH:MEDIUM:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!SRP:!CAMELLIA'
     },
-    debug: true, // Enable debug logging
-    logger: true // Log information
+    logger: false, // Set to true for debugging
+    debug: false,  // Set to true for verbose SMTP logs
 });
 
-// Add connection verification
+// Verify SMTP connection on startup (non-blocking)
 transporter.verify(function(error, success) {
     if (error) {
-        console.log('SMTP connection error:', error);
+        console.error('❌ SMTP connection error:', error.message);
+        console.error('   Make sure MAIL_USER and MAIL_PASS are correct Gmail App Password credentials');
     } else {
-        console.log('SMTP server is ready to send emails');
+        console.log('✅ SMTP server is ready to send emails');
     }
 });
 // Track recent emails using a more specific key to prevent template confusion
 const recentEmails = new Map();
 
-const sendEmail = async (email, subject, html) => {
+const sendEmail = async (email, subject, html, retries = 3) => {
     try {
+        // Validate inputs
+        if (!email || !subject || !html) {
+            throw new Error('Email, subject, and html content are required');
+        }
+
         // Create a unique key using a hash of the email content
-        // This way, different templates sent to the same email won't be considered duplicates
         const contentHash = require('crypto')
             .createHash('md5')
-            .update(html.substring(0, 100)) // Hash the first 100 chars for speed
+            .update(html.substring(0, 100))
             .digest('hex');
             
         const emailKey = `${email}:${subject}:${contentHash}`;
         
-        // Check if we've just sent this same email with same content
-        // if (recentEmails.has(emailKey)) {
-        //     const lastSent = recentEmails.get(emailKey);
-        //     const timeSinceLastEmail = Date.now() - lastSent;
-            
-        //     // Only prevent exact duplicates (same content) within 3 seconds
-        //     if (timeSinceLastEmail < 3000) {
-        //         console.log(`Preventing duplicate email to ${email} - last sent ${timeSinceLastEmail}ms ago`);
-        //         return { 
-        //             messageId: 'DUPLICATE_PREVENTED',
-        //             response: 'Duplicate email prevented'
-        //         };
-        //     }
-        // }
-        
-        console.log("Sending email to:", email);
-        console.log("Subject:", subject);
-        console.log("Content type:", html.includes("<!DOCTYPE html>") ? "HTML template" : "Simple text");
+        console.log(`📧 Sending email to: ${email}`);
+        console.log(`   Subject: ${subject}`);
+        console.log(`   Content type: ${html.includes("<!DOCTYPE html>") ? "HTML template" : "Simple text"}`);
 
         const mailOptions = {
-            from: `SkillHouse <${process.env.MAIL_USER}>`,
+            from: `AI DocuSphere <${process.env.MAIL_USER}>`, // Updated sender name
             to: email,
             subject: subject,
             html: html,
         };
 
-        // Send the email
-        const info = await transporter.sendMail(mailOptions);
+        // Send the email with retry logic
+        let lastError;
+        for (let attempt = 1; attempt <= retries; attempt++) {
+            try {
+                const info = await transporter.sendMail(mailOptions);
+                
+                // Log success
+                console.log(`✅ Email sent successfully (attempt ${attempt}/${retries}):`, { 
+                    messageId: info.messageId,
+                    to: email,
+                    subject: subject
+                });
+                
+                // Add to recent emails map
+                recentEmails.set(emailKey, Date.now());
+                
+                // Clean up old entries to prevent memory leaks
+                setTimeout(() => {
+                    recentEmails.delete(emailKey);
+                }, 60000);
+
+                return info;
+            } catch (err) {
+                lastError = err;
+                console.error(`❌ Email send attempt ${attempt}/${retries} failed:`, err.message);
+                
+                // Wait before retry (exponential backoff)
+                if (attempt < retries) {
+                    const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+                    console.log(`   Retrying in ${waitTime}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                }
+            }
+        }
         
-        // Log success
-        console.log('Email sent successfully:', { 
-            messageId: info.messageId,
+        // All retries failed
+        throw lastError;
+        
+    } catch (error) {
+        console.error('❌ Failed to send email after all retries:', {
+            error: error.message,
+            code: error.code,
             to: email,
             subject: subject
         });
         
-        // Add this email to our recent emails map
-        recentEmails.set(emailKey, Date.now());
-        
-        // Clean up old entries to prevent memory leaks
-        setTimeout(() => {
-            recentEmails.delete(emailKey);
-        }, 60000);
-
-        return info;
-    } catch (error) {
-        console.error('Error sending email:', error);
-        throw new Error(`Failed to send email: ${error.message}`);
+        // Provide helpful error messages
+        if (error.code === 'ETIMEDOUT' || error.code === 'ESOCKET') {
+            throw new Error(`Email service connection timeout. Please check your network and SMTP settings.`);
+        } else if (error.code === 'EAUTH') {
+            throw new Error(`Email authentication failed. Please verify MAIL_USER and MAIL_PASS are correct Gmail App Password credentials.`);
+        } else {
+            throw new Error(`Failed to send email: ${error.message}`);
+        }
     }
 }
 
