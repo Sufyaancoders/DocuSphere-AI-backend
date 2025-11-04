@@ -23,7 +23,9 @@ app.use(cors({
     'http://localhost:3000',
     'http://localhost:5173',
     'http://localhost:5174',
-    'https://your-vercel-domain.vercel.app', // Add your production domain
+    'https://your-vercel-domain.vercel.app', 
+    'https://docusphere-ai.onrender.com',
+    'https://docu-sphere-ai.vercel.app/' // Add your production domain
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
