@@ -9,29 +9,38 @@ if (!process.env.MAIL_USER || !process.env.MAIL_PASS) {
     console.error('   Current MAIL_PASS:', process.env.MAIL_PASS ? `SET (${process.env.MAIL_PASS.length} chars)` : 'NOT SET');
 }
 
-// Try port 587 with STARTTLS first (better for local development and some networks)
+// Detect environment: Render blocks port 587, so use 465 for production
+const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+const smtpPort = isProduction ? 465 : 587;
+const isSecure = isProduction ? true : false;
+
 const transporterConfig = {
     host: 'smtp.gmail.com',
-    port: 587, // Changed to 587 with STARTTLS (often more compatible)
-    secure: false, // false for port 587, STARTTLS used instead
+    port: smtpPort,
+    secure: isSecure, // true for 465 (SSL), false for 587 (STARTTLS)
     auth: {
         user: process.env.MAIL_USER?.trim(), // Trim any whitespace
         pass: process.env.MAIL_PASS?.trim(), // Trim any whitespace
     },
-    // Timeout settings - reduced for faster failure detection
-    connectionTimeout: 30000, // 30 seconds
-    greetingTimeout: 20000,   // 20 seconds
-    socketTimeout: 30000,     // 30 seconds
+    // Connection pool for production
+    pool: isProduction,
+    maxConnections: isProduction ? 5 : 1,
+    // Timeout settings
+    connectionTimeout: 60000, // 60 seconds
+    greetingTimeout: 30000,   // 30 seconds
+    socketTimeout: 60000,     // 60 seconds
     // TLS configuration
     tls: {
-        rejectUnauthorized: false, // Less strict for compatibility
-        minVersion: 'TLSv1.2'
+        rejectUnauthorized: !isProduction, // Less strict in production for Render compatibility
+        minVersion: 'TLSv1.2',
+        ciphers: 'HIGH:MEDIUM:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK'
     },
-    logger: true, // Enabled for debugging
-    debug: true,  // Enabled for verbose logs
+    logger: true, // Keep enabled for debugging
+    debug: false,  // Disable verbose logs in production
 };
 
 console.log('📧 Initializing SMTP with config:', {
+    environment: isProduction ? 'PRODUCTION' : 'DEVELOPMENT',
     host: transporterConfig.host,
     port: transporterConfig.port,
     secure: transporterConfig.secure,
