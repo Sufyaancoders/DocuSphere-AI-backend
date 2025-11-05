@@ -22,22 +22,35 @@ const transporterConfig = {
         user: process.env.MAIL_USER?.trim(), // Trim any whitespace
         pass: process.env.MAIL_PASS?.trim(), // Trim any whitespace
     },
-    // Disable connection pool to avoid connection issues
-    pool: false,
-    // Increased timeout settings for slow connections
-    connectionTimeout: 60000, // 60 seconds
-    greetingTimeout: 30000,   // 30 seconds
-    socketTimeout: 60000,     // 60 seconds
-    // Require TLS upgrade for security
+    // Connection settings optimized for Render
+    pool: false, // Disable connection pooling
+    maxConnections: 1,
+    maxMessages: 1,
+    rateDelta: 1000,
+    rateLimit: 1,
+    
+    // Aggressive timeout settings for Render
+    connectionTimeout: 30000,  // 30 seconds (reduced from 60)
+    greetingTimeout: 20000,    // 20 seconds (reduced from 30)
+    socketTimeout: 30000,      // 30 seconds (reduced from 60)
+    
+    // Force TLS upgrade for security
     requireTLS: true,
-    // TLS configuration - Relaxed for compatibility
+    
+    // TLS configuration - More permissive for Render compatibility
     tls: {
-        rejectUnauthorized: false, // Allow self-signed certificates
+        rejectUnauthorized: false,
         minVersion: 'TLSv1.2',
-        ciphers: 'SSLv3'
+        maxVersion: 'TLSv1.3',
+        ciphers: 'HIGH:!aNULL:!eNULL:!EXPORT:!DES:!MD5:!PSK:!RC4'
     },
-    logger: true, // Keep enabled for debugging
-    debug: true,  // Enable verbose logs for debugging
+    
+    // Additional options for better compatibility
+    ignoreTLS: false,
+    opportunisticTLS: true,
+    
+    logger: true,
+    debug: true,
 };
 
 console.log('📧 Initializing SMTP with config:', {
@@ -52,17 +65,25 @@ console.log('📧 Initializing SMTP with config:', {
     note: 'Using port 587 for Render compatibility'
 });
 
-const transporter = nodemailer.createTransport(transporterConfig);
+// Create transporter
+let transporter = nodemailer.createTransport(transporterConfig);
 
-// Verify SMTP connection on startup (non-blocking)
-transporter.verify(function(error, success) {
-    if (error) {
-        console.error('❌ SMTP connection error:', error.message);
-        console.error('   Make sure MAIL_USER and MAIL_PASS are correct Gmail App Password credentials');
-    } else {
+// Verify SMTP connection on startup (with timeout)
+const verifyConnection = async () => {
+    try {
+        await transporter.verify();
         console.log('✅ SMTP server is ready to send emails');
+        return true;
+    } catch (error) {
+        console.error('⚠️ SMTP initial verification failed:', error.message);
+        console.error('   This is normal on Render - connections are established per-request');
+        console.error('   Will retry when sending email...');
+        return false;
     }
-});
+};
+
+// Run verification but don't block startup
+verifyConnection();
 // Track recent emails using a more specific key to prevent template confusion
 const recentEmails = new Map();
 
@@ -92,17 +113,24 @@ const sendEmail = async (email, subject, html, retries = 3) => {
             html: html,
         };
 
-        // Send the email with retry logic
+        // Send the email with retry logic and transporter recreation
         let lastError;
         for (let attempt = 1; attempt <= retries; attempt++) {
             try {
+                // Recreate transporter on retry to get fresh connection
+                if (attempt > 1) {
+                    console.log(`🔄 Creating fresh transporter for attempt ${attempt}...`);
+                    transporter = nodemailer.createTransport(transporterConfig);
+                }
+                
                 const info = await transporter.sendMail(mailOptions);
                 
                 // Log success
                 console.log(`✅ Email sent successfully (attempt ${attempt}/${retries}):`, { 
                     messageId: info.messageId,
                     to: email,
-                    subject: subject
+                    subject: subject,
+                    response: info.response
                 });
                 
                 // Add to recent emails map
@@ -116,12 +144,16 @@ const sendEmail = async (email, subject, html, retries = 3) => {
                 return info;
             } catch (err) {
                 lastError = err;
-                console.error(`❌ Email send attempt ${attempt}/${retries} failed:`, err.message);
+                console.error(`❌ Email send attempt ${attempt}/${retries} failed:`, {
+                    error: err.message,
+                    code: err.code,
+                    command: err.command
+                });
                 
                 // Wait before retry (exponential backoff)
                 if (attempt < retries) {
-                    const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
-                    console.log(`   Retrying in ${waitTime}ms...`);
+                    const waitTime = Math.min(2000 * attempt, 8000); // 2s, 4s, 6s...
+                    console.log(`   Waiting ${waitTime}ms before retry...`);
                     await new Promise(resolve => setTimeout(resolve, waitTime));
                 }
             }
