@@ -15,8 +15,9 @@ app.use(cors({
     'http://localhost:5173',
     'http://localhost:3000',
     'https://your-frontend-domain.vercel.app', // Add your Vercel domain
-    'https://your-custom-domain.com' // Add any custom domains
-  ], // adjust to your frontend URL/port
+    'https://your-custom-domain.com',
+    'https://docu-sphere-ai.vercel.app', // Add any custom domains
+  ].filter(Boolean),// adjust to your frontend URL/port
   credentials: true
 }));
 app.use(cookieParser());
@@ -28,7 +29,7 @@ app.get('/', (req, res) => {
 });
 
 app.use("/api/v1", require("./routes/user"));
-app.use("/api/v1/gemini", require("./routes/assistent"));
+app.use("/api/v1/gemini", require("./routes/assistant"));
 
 app.listen(process.env.PORT || 3000, () => {
   console.log(`Server is running on port ${process.env.PORT || 3000}`);
