@@ -17,7 +17,7 @@ app.use(cors({
     'https://your-frontend-domain.vercel.app', // Add your Vercel domain
     'https://your-custom-domain.com',
     'https://docu-sphere-ai.vercel.app', // Add any custom domains
-  ].filter(Boolean),// adjust to your frontend URL/port
+  ], // adjust to your frontend URL/port
   credentials: true
 }));
 app.use(cookieParser());
