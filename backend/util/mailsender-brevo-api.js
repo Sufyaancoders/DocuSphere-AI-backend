@@ -6,6 +6,12 @@ const recentEmails = new Map();
 
 const sendEmail = async (email, subject, html) => {
     try {
+        // Check if API key is configured
+        if (!process.env.BREVO_API_KEY) {
+            console.error('❌ BREVO_API_KEY is not set in environment variables!');
+            throw new Error('BREVO_API_KEY is not configured. Please add it to your environment variables.');
+        }
+
         const contentHash = require('crypto')
             .createHash('md5')
             .update(html.substring(0, 100))
@@ -15,6 +21,7 @@ const sendEmail = async (email, subject, html) => {
         
         console.log("📧 Sending email via Brevo API to:", email);
         console.log("Subject:", subject);
+        console.log("Using API Key:", process.env.BREVO_API_KEY ? '✓ Set' : '✗ Not set');
 
         // Brevo API endpoint
         const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
