@@ -62,7 +62,7 @@ app.get('/health', (req, res) => {
 });
 
 app.use("/api/v1", require("./routes/user"));
-app.use("/api/v1/gemini", require("./routes/assistant"));
+app.use("/api/v1/gemini", require("./routes/assistent"));
 
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
