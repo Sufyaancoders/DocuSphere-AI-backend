@@ -28,6 +28,13 @@ const askToAssistant = async(req,res)=>{
             console.error('Error calling Gemini API:', err);
             return res.status(500).json({response: 'Error calling Gemini API'});
         }
+           if (!result) {
+            return res.json({
+                type: "general",
+                userInput: command,
+                response: "Sorry, I couldn't get a response from the AI. Please try again."
+            });
+        }
         let gemResult;
         if(typeof result === "string"){
             let clean = result.trim();
@@ -37,7 +44,7 @@ const askToAssistant = async(req,res)=>{
             try {
                 gemResult = JSON.parse(clean);
             } catch (error) {
-                const jsonMatch = clean.match(/{[/s/S]*}/)
+                const jsonMatch = clean.match(/{[\s\S]*}/)
                 if(jsonMatch){
                     gemResult = JSON.parse(jsonMatch[0]);
                 }else{
