@@ -1,8 +1,8 @@
 const OTP = require('../models/otp');
 const User= require("../models/user")
-// Use SMTP mailer directly (Brevo)
-const sendEmail = require('../util/mailsender');
-console.log("Using SMTP for emails (Brevo)");
+// Use Brevo API instead of SMTP (more reliable on Render)
+const sendEmail = require('../util/mailsender-brevo-api');
+console.log("Using Brevo API for emails");
 const { otpVerificationEmail } = require('../mail/emailVerificationTemplete');
 const otpGenerator = require('otp-generator');
 exports.sendOTP = async (req, res) => {
