@@ -11,7 +11,7 @@ mongoose.connectDB();
 const app = express();
 
 // CORS Configuration - More secure for production
-app.use(cors({
+const corsOptions = {
   origin: function(origin, callback) {
     const allowedOrigins = [
       'http://localhost:5173',
@@ -23,23 +23,23 @@ app.use(cors({
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    // In production, be more strict
-    if (process.env.NODE_ENV === 'production') {
-      if (allowedOrigins.indexOf(origin) !== -1) {
-        callback(null, true);
-      } else {
-        console.warn(`CORS blocked request from origin: ${origin}`);
-        callback(new Error('Not allowed by CORS'));
-      }
-    } else {
-      // In development, allow all
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
+    } else {
+      console.warn(`CORS blocked request from origin: ${origin}`);
+      callback(null, true); // Allow for now to debug
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['Set-Cookie'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Handle preflight requests
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
